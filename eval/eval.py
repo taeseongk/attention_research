@@ -1,6 +1,8 @@
 import re
+import json
 import string
 from collections import Counter
+from pathlib import Path
 
 
 class QAMetrics:
@@ -97,3 +99,10 @@ class QAEvaluator:
         aggr_f1_score = sum(f1_scores) / len(f1_scores) * 100
         scores = {"aggr_exact_score": aggr_exact_score, "aggr_f1_score": aggr_f1_score}
         return results, scores
+
+    @staticmethod
+    def save_results(results, scores, output_path: str):
+        output_path = Path(output_path)
+        save_data = {"results": results, "scores": scores}
+        with open(output_path, "w") as f:
+            json.dump(save_data, f, indent=2)

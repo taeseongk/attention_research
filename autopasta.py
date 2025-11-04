@@ -119,7 +119,9 @@ class AutoPASTA(PASTA):
         """
         prompt = self._answer_prompt(question, context)
 
-        inputs, offset_mapping = self.inputs_from_batch(text=[prompt], tokenizer=self.tokenizer, device="cuda")
+        inputs, offset_mapping = self.inputs_from_batch(
+            text=[prompt], tokenizer=self.tokenizer, device="cuda"
+        )
 
         with self.apply_steering(
             model=self.model,
@@ -149,7 +151,7 @@ class AutoPASTA(PASTA):
 
         # Step 1: Generate key sentence
         key_sentence = self.generate_key_sentence(question, context)
-        #print(f"Key Sentence: {key_sentence}")
+        # print(f"Key Sentence: {key_sentence}")
 
         # Step 2: Match to original context
         matched_sentence, _ = self.match_to_context(key_sentence, context)
@@ -176,7 +178,7 @@ class AutoPASTA(PASTA):
                     "question": example["question"],
                     "context": example["context"],
                     "prediction": prediction,
-                    "gold": example["answers"]
+                    "gold": example["answers"],
                 }
             )
         return predictions
@@ -231,13 +233,14 @@ def main():
     )
 
     n_samples = 50
-    squad_dataset = QADatasetLoader().load_squad(n_samples=n_samples)
+    squad_dataset = QADatasetLoader.load_squad(n_samples=n_samples)
     dataset = squad_dataset
 
     predictions = autopasta.generate_all_preds(dataset, "squad")
     results, scores = QAEvaluator.evaluate(predictions)
     print(results)
     print(scores)
+
 
 if __name__ == "__main__":
     main()

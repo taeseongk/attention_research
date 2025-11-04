@@ -65,9 +65,8 @@ class AutoPASTA(PASTA):
                 max_new_tokens=max_new_tokens,
                 do_sample=temperature > 0,
                 temperature=temperature if temperature > 0 else 1.0,
-                pad_token_id=self.tokenizer.pad_token_id
+                pad_token_id=self.tokenizer.pad_token_id,
             )
-
 
         # Decode only the new tokens
         generated_text = self.tokenizer.decode(
@@ -141,11 +140,12 @@ class AutoPASTA(PASTA):
                     or self.tokenizer.eos_token_id,
                 )
 
-        full_output = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-        answer = full_output[len(prompt) :].strip()
-        return answer
+        answer = self.tokenizer.decode(
+            outputs[0][inputs["input_ids"].shape[1] :], skip_special_tokens=True
+        )
+        return answer.strip()
 
-    def answer_question(self, question: str, context: str, max_new_tokens: int = 128):
+    def answer_question(self, question: str, context: str, max_new_tokens: int = 50):
         """
         Complete AutoPASTA pipeline: Identify key sentence and answer with steering.
         """
@@ -217,7 +217,7 @@ Answer:"""
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--n_samples", type=int, default=20, help='Number of samples')
+    parser.add_argument("--n_samples", type=int, default=20, help="Number of samples")
     args = parser.parse_args()
     head_config = {
         "3": [17, 7, 6, 12, 18],

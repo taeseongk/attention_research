@@ -29,7 +29,7 @@ class Baseline:
         Create prompt for the model
         """
         prompt = ""
-        if dataset_name == "squad" :
+        if dataset_name == "squad":
             prompt = f"""Answer the question below, paired with a context that provides background knowledge. Only output the answer without other context words.
 
 Context: {context}
@@ -38,7 +38,7 @@ Question: {question}
 
 Answer:"""
         elif dataset_name == "hotpot_qa":
-            prompt = f"""Answer the question below, paired with a contex that provides background knowledge. Only output the answer without other context words.
+            prompt = f"""Answer the question below, paired with a context that provides background knowledge. Only output the answer without other context words.
         
 Context: {context}
         
@@ -74,7 +74,9 @@ Answer:"""
 
         predictions = []
         for example in tqdm(dataset, desc=f"Predicting {dataset_name}"):
-            prompt = self.create_prompt(example["question"], example["context"], dataset_name)
+            prompt = self.create_prompt(
+                example["question"], example["context"], dataset_name
+            )
             prediction = self.generate_pred(prompt)
             print(f"Question: {example['question']}\n")
             print(f"Context: {example['context']}\n")
@@ -93,12 +95,12 @@ Answer:"""
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--n_samples", type=int, default=20, help='Number of samples')
+    parser.add_argument("--n_samples", type=int, default=20, help="Number of samples")
     args = parser.parse_args()
     # model_name = "huggyllama/llama-7b"
-    #model_name = "meta-llama/Meta-Llama-3-8B"
+    # model_name = "meta-llama/Meta-Llama-3-8B"
     model_name = "meta-llama/Meta-Llama-3-8B-Instruct"
-    #model_name = "lmsys/vicuna-7b-v1.5"
+    # model_name = "lmsys/vicuna-7b-v1.5"
     predictor = Baseline(model_name=model_name)
 
     n_samples = args.n_samples
@@ -106,12 +108,13 @@ def main():
     hotpotqa_dataset = QADatasetLoader.load_hotpotqa(n_samples=n_samples)
 
     dataset = squad_dataset
-    #dataset = hotpotqa_dataset
+    # dataset = hotpotqa_dataset
 
     predictions = predictor.generate_all_preds(dataset, "squad")
     results, scores = QAEvaluator.evaluate(predictions, "results/baseline.json")
     print(results)
     print(scores)
+
 
 if __name__ == "__main__":
     main()

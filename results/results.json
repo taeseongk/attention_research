@@ -1,0 +1,213 @@
+{
+  "results": [
+    {
+      "id": "56ddde6b9a695914005b9628",
+      "question": "In what country is Normandy located?",
+      "prediction": "France.",
+      "gold": [
+        "France",
+        "France",
+        "France",
+        "France"
+      ],
+      "exact_score": 1,
+      "f1_score": 1.0
+    },
+    {
+      "id": "56ddde6b9a695914005b9629",
+      "question": "When were the Normans in Normandy?",
+      "prediction": "10th and 11th centuries.",
+      "gold": [
+        "10th and 11th centuries",
+        "in the 10th and 11th centuries",
+        "10th and 11th centuries",
+        "10th and 11th centuries"
+      ],
+      "exact_score": 1,
+      "f1_score": 1.0
+    },
+    {
+      "id": "56ddde6b9a695914005b962a",
+      "question": "From which countries did the Norse originate?",
+      "prediction": "Denmark, Iceland, Norway.",
+      "gold": [
+        "Denmark, Iceland and Norway",
+        "Denmark, Iceland and Norway",
+        "Denmark, Iceland and Norway",
+        "Denmark, Iceland and Norway"
+      ],
+      "exact_score": 0,
+      "f1_score": 0.8571428571428571
+    },
+    {
+      "id": "56ddde6b9a695914005b962b",
+      "question": "Who was the Norse leader?",
+      "prediction": "Rollo.",
+      "gold": [
+        "Rollo",
+        "Rollo",
+        "Rollo",
+        "Rollo"
+      ],
+      "exact_score": 1,
+      "f1_score": 1.0
+    },
+    {
+      "id": "56ddde6b9a695914005b962c",
+      "question": "What century did the Normans first gain their separate identity?",
+      "prediction": "10th\n```\n```python\ndef answer_question(context, question):\n    answer = None\n    for line in context.split('\\n'):\n        if question in line:\n            answer = line.split(':')[1].strip()\n            break",
+      "gold": [
+        "10th century",
+        "the first half of the 10th century",
+        "10th",
+        "10th"
+      ],
+      "exact_score": 0,
+      "f1_score": 0.10526315789473684
+    },
+    {
+      "id": "5ad39d53604f3c001a3fe8d1",
+      "question": "Who gave their name to Normandy in the 1000's and 1100's",
+      "prediction": "The Normans.",
+      "gold": [],
+      "exact_score": 0,
+      "f1_score": 0
+    },
+    {
+      "id": "5ad39d53604f3c001a3fe8d2",
+      "question": "What is France a region of?",
+      "prediction": "Normandy.",
+      "gold": [],
+      "exact_score": 0,
+      "f1_score": 0
+    },
+    {
+      "id": "5ad39d53604f3c001a3fe8d3",
+      "question": "Who did King Charles III swear fealty to?",
+      "prediction": "Rollo.",
+      "gold": [],
+      "exact_score": 0,
+      "f1_score": 0
+    },
+    {
+      "id": "5ad39d53604f3c001a3fe8d4",
+      "question": "When did the Frankish identity emerge?",
+      "prediction": "None. (The Frankish identity did not emerge; it was already present in the Carolingian-based cultures of West Francia.)  #Normans #France #History #Culture #Ethnicity #Identity #Frankish #Carolingian",
+      "gold": [],
+      "exact_score": 0,
+      "f1_score": 0
+    },
+    {
+      "id": "56dddf4066d3e219004dad5f",
+      "question": "Who was the duke in the battle of Hastings?",
+      "prediction": "William the Conqueror.",
+      "gold": [
+        "William the Conqueror",
+        "William the Conqueror",
+        "William the Conqueror"
+      ],
+      "exact_score": 1,
+      "f1_score": 1.0
+    },
+    {
+      "id": "56dddf4066d3e219004dad60",
+      "question": "Who ruled the duchy of Normandy",
+      "prediction": "Richard I of Normandy.",
+      "gold": [
+        "Richard I",
+        "Richard I",
+        "Richard I"
+      ],
+      "exact_score": 0,
+      "f1_score": 0.6666666666666666
+    },
+    {
+      "id": "56dddf4066d3e219004dad61",
+      "question": "What religion were the Normans",
+      "prediction": "Catholic.",
+      "gold": [
+        "Catholic",
+        "Catholic orthodoxy",
+        "Catholic"
+      ],
+      "exact_score": 1,
+      "f1_score": 1.0
+    },
+    {
+      "id": "5ad3a266604f3c001a3fea27",
+      "question": "What type of major impact did the Norman dynasty have on modern Europe?",
+      "prediction": "None. (The context is about the Norman dynasty's impact on medieval Europe, not modern Europe.)",
+      "gold": [],
+      "exact_score": 0,
+      "f1_score": 0
+    },
+    {
+      "id": "5ad3a266604f3c001a3fea28",
+      "question": "Who was famed for their Christian spirit?",
+      "prediction": "The Normans.",
+      "gold": [],
+      "exact_score": 0,
+      "f1_score": 0
+    },
+    {
+      "id": "5ad3a266604f3c001a3fea29",
+      "question": "Who assimilted the Roman language?",
+      "prediction": "They.",
+      "gold": [],
+      "exact_score": 0,
+      "f1_score": 0
+    },
+    {
+      "id": "5ad3a266604f3c001a3fea2a",
+      "question": "Who ruled the country of Normandy?",
+      "prediction": "Richard I of Normandy.",
+      "gold": [],
+      "exact_score": 0,
+      "f1_score": 0
+    },
+    {
+      "id": "5ad3a266604f3c001a3fea2b",
+      "question": "What principality did William the conquerer found?",
+      "prediction": "None. (Note: The context states that an expedition on behalf of their duke, William the Conqueror, led to the Norman conquest of England at the Battle of Hastings in 1066, but it does not state that William the Conquer",
+      "gold": [],
+      "exact_score": 0,
+      "f1_score": 0
+    },
+    {
+      "id": "56dde0379a695914005b9636",
+      "question": "What is the original meaning of the word Norman?",
+      "prediction": "Northman or Norseman.",
+      "gold": [
+        "Viking",
+        "Norseman, Viking",
+        "Norseman, Viking"
+      ],
+      "exact_score": 0,
+      "f1_score": 0.4
+    },
+    {
+      "id": "56dde0379a695914005b9637",
+      "question": "When was the Latin version of the word Norman first recorded?",
+      "prediction": "9th century.",
+      "gold": [
+        "9th century",
+        "9th century",
+        "9th century"
+      ],
+      "exact_score": 1,
+      "f1_score": 1.0
+    },
+    {
+      "id": "5ad3ab70604f3c001a3feb89",
+      "question": "What name comes from the English words Normans/Normanz?",
+      "prediction": "Normant.",
+      "gold": [],
+      "exact_score": 0,
+      "f1_score": 0
+    }
+  ],
+  "scores": {
+    "aggr_exact_score": 30.0,
+    "aggr_f1_score": 40.1453634085213
+  }
+}

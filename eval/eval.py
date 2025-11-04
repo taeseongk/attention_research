@@ -65,7 +65,7 @@ class QAEvaluator:
     """Evaluate QA models on different datasets"""
 
     @staticmethod
-    def evaluate(predictions):
+    def evaluate(predictions, output_path: str):
         results = []
         exact_scores = []
         f1_scores = []
@@ -98,11 +98,12 @@ class QAEvaluator:
         aggr_exact_score = sum(exact_scores) / len(exact_scores) * 100
         aggr_f1_score = sum(f1_scores) / len(f1_scores) * 100
         scores = {"aggr_exact_score": aggr_exact_score, "aggr_f1_score": aggr_f1_score}
+        QAEvaluator.save_results(results, scores, output_path)
         return results, scores
 
     @staticmethod
     def save_results(results, scores, output_path: str):
-        output_path = Path(output_path)
+        path = Path(output_path)
         save_data = {"results": results, "scores": scores}
-        with open(output_path, "w") as f:
+        with open(path, "w") as f:
             json.dump(save_data, f, indent=2)

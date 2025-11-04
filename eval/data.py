@@ -15,7 +15,7 @@ class QADatasetLoader:
         SQuAD: Reading comprehension dataset with questions based on Wikipedia
         """
         print(f"Loading SQuAD ({split})...")
-        dataset = load_dataset("squad_v2", split=split)
+        dataset = load_dataset("squad", split=split)
 
         if n_samples:
             dataset = dataset.select(range(min(n_samples, len(dataset))))

@@ -4,6 +4,7 @@ from typing import List
 from sentence_transformers import SentenceTransformer
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import re
+import argparse
 from tqdm import tqdm
 from eval.data import QADatasetLoader
 from eval.eval import QAEvaluator
@@ -56,7 +57,6 @@ class AutoPASTA(PASTA):
         is most important for answering the question.
         """
         prompt = self._key_sentence_prompt(question, context)
-        # print(f"Prompt: {prompt}")
         inputs = self.tokenizer(prompt, return_tensors="pt").to(self.model.device)
 
         with torch.no_grad():
@@ -65,14 +65,15 @@ class AutoPASTA(PASTA):
                 max_new_tokens=max_new_tokens,
                 do_sample=temperature > 0,
                 temperature=temperature if temperature > 0 else 1.0,
-                pad_token_id=self.tokenizer.pad_token_id or self.tokenizer.eos_token_id,
+                pad_token_id=self.tokenizer.pad_token_id
             )
 
-        # Extract generated text
-        full_output = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-        generated = full_output[len(prompt) :].strip()
 
-        return generated
+        # Decode only the new tokens
+        generated_text = self.tokenizer.decode(
+            outputs[0][inputs["input_ids"].shape[1] :], skip_special_tokens=True
+        )
+        return generated_text.strip()
 
     def match_to_context(
         self,
@@ -215,6 +216,9 @@ Answer:"""
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--n_samples", type=int, default=20, help='Number of samples')
+    args = parser.parse_args()
     head_config = {
         "3": [17, 7, 6, 12, 18],
         "8": [28, 21, 24],
@@ -232,12 +236,12 @@ def main():
         alpha=0.01,
     )
 
-    n_samples = 50
+    n_samples = args.n_samples
     squad_dataset = QADatasetLoader.load_squad(n_samples=n_samples)
     dataset = squad_dataset
 
     predictions = autopasta.generate_all_preds(dataset, "squad")
-    results, scores = QAEvaluator.evaluate(predictions)
+    results, scores = QAEvaluator.evaluate(predictions, "results/autopasta.json")
     print(results)
     print(scores)
 

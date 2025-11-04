@@ -1,4 +1,5 @@
 import torch
+import argparse
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from eval.data import QADatasetLoader
 from eval.eval import QAEvaluator
@@ -29,7 +30,7 @@ class Baseline:
         """
         prompt = ""
         if dataset_name == "squad" :
-            prompt = f"""Answer the question below, paired with a context that provides background knowledge. Only output the answer without other context words. If the answer does not exist, do not return anything.
+            prompt = f"""Answer the question below, paired with a context that provides background knowledge. Only output the answer without other context words.
 
 Context: {context}
 
@@ -91,21 +92,24 @@ Answer:"""
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--n_samples", type=int, default=20, help='Number of samples')
+    args = parser.parse_args()
     # model_name = "huggyllama/llama-7b"
     #model_name = "meta-llama/Meta-Llama-3-8B"
     model_name = "meta-llama/Meta-Llama-3-8B-Instruct"
     #model_name = "lmsys/vicuna-7b-v1.5"
     predictor = Baseline(model_name=model_name)
 
-    n_samples = 50
-    squad_dataset = QADatasetLoader().load_squad(n_samples=n_samples)
-    hotpotqa_dataset = QADatasetLoader().load_hotpotqa(n_samples=n_samples)
+    n_samples = args.n_samples
+    squad_dataset = QADatasetLoader.load_squad(n_samples=n_samples)
+    hotpotqa_dataset = QADatasetLoader.load_hotpotqa(n_samples=n_samples)
 
     dataset = squad_dataset
     #dataset = hotpotqa_dataset
 
     predictions = predictor.generate_all_preds(dataset, "squad")
-    results, scores = QAEvaluator.evaluate(predictions)
+    results, scores = QAEvaluator.evaluate(predictions, "results/baseline.json")
     print(results)
     print(scores)
 

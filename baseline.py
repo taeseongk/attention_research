@@ -14,6 +14,7 @@ class Baseline:
 
         self.model = AutoModelForCausalLM.from_pretrained(
             model_name,
+            attn_implementation="eager",
             torch_dtype=torch.float16,
             device_map="cuda:0",
             low_cpu_mem_usage=True,
@@ -96,6 +97,8 @@ Answer:"""
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--n_samples", type=int, default=20, help="Number of samples")
+    parser.add_argument("--seed", type=int, default=None, help="Random Seed for dataset sampling")
+    parser.add_argument("--dataset", type=str, default="squad", choices=["squad", "hotpotqa"], help="Dataset to use")
     args = parser.parse_args()
     # model_name = "huggyllama/llama-7b"
     # model_name = "meta-llama/Meta-Llama-3-8B"
@@ -103,14 +106,13 @@ def main():
     # model_name = "lmsys/vicuna-7b-v1.5"
     predictor = Baseline(model_name=model_name)
 
-    n_samples = args.n_samples
-    squad_dataset = QADatasetLoader.load_squad(n_samples=n_samples)
-    hotpotqa_dataset = QADatasetLoader.load_hotpotqa(n_samples=n_samples)
+    dataset = ""
+    if args.dataset == "squad":
+        dataset = QADatasetLoader.load_squad(n_samples=args.n_samples, seed=args.seed)
+    elif args.dataset == "hotpotqa":
+        dataset = QADatasetLoader.load_hotpotqa(n_samples=args.n_samples)
 
-    dataset = squad_dataset
-    # dataset = hotpotqa_dataset
-
-    predictions = predictor.generate_all_preds(dataset, "squad")
+    predictions = predictor.generate_all_preds(dataset, args.dataset)
     results, scores = QAEvaluator.evaluate(predictions, "results/baseline.json")
     print(results)
     print(scores)

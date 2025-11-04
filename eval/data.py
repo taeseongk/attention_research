@@ -3,13 +3,14 @@ Multi-Dataset QA Evaluation Script
 """
 
 from datasets import load_dataset
+import random
 
 
 class QADatasetLoader:
     """Load and prepare different QA datasets"""
 
     @staticmethod
-    def load_squad(split="validation", n_samples=100):
+    def load_squad(split="validation", n_samples=100, seed=None):
         """
         Load SQuAD v2 dataset
         SQuAD: Reading comprehension dataset with questions based on Wikipedia
@@ -17,8 +18,13 @@ class QADatasetLoader:
         print(f"Loading SQuAD ({split})...")
         dataset = load_dataset("squad", split=split)
 
-        if n_samples:
-            dataset = dataset.select(range(min(n_samples, len(dataset))))
+        if n_samples and n_samples < len(dataset):
+            if seed is not None:
+                random.seed(seed)
+                indices = random.sample(range(len(dataset)), n_samples)
+                dataset = dataset.select(indices)
+            else:
+                dataset = dataset.select(range(n_samples))
 
         # Format for unified interface
         formatted_data = []

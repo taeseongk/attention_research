@@ -108,7 +108,7 @@ class AutoPASTA(PASTA):
         question: str,
         context: str,
         key_sentence: str,
-        max_new_tokens: int = 128,
+        max_new_tokens: int = 50,
         temperature: float = 0.0,
     ) -> str:
         """
@@ -156,7 +156,7 @@ class AutoPASTA(PASTA):
 
         # Step 2: Match to original context
         matched_sentence, _ = self.match_to_context(key_sentence, context)
-        print(f"Matched Sentence: {matched_sentence}")
+        #print(f"Matched Sentence: {matched_sentence}")
 
         # Step 3: Answer with steering
         answer = self.answer_with_steering(
@@ -206,7 +206,7 @@ Sentence:"""
 
     def _answer_prompt(self, question: str, context: str) -> str:
         """Build prompt for direct answer generation."""
-        return f"""Answer the question below, paired with a context that provdies background knowledge. Only output the answer without other context words.
+        return f"""Answer the question below, paired with a context that provides background knowledge. Only output the answer without other context words.
 
 Context: {context}
 
@@ -218,17 +218,21 @@ Answer:"""
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--n_samples", type=int, default=20, help="Number of samples")
+    parser.add_argument("--seed", type=int, default=None, help="Random Seed for dataset sampling")
+    parser.add_argument("--dataset", type=str, default="squad", choices=["squad", "hotpotqa"], help="Dataset to use")
     args = parser.parse_args()
-    head_config = {
-        "3": [17, 7, 6, 12, 18],
-        "8": [28, 21, 24],
-        "5": [24, 4],
-        "0": [17],
-        "4": [3],
-        "6": [14],
-        "7": [13],
-        "11": [16],
-    }
+
+    #head_config = {
+    #    "3": [17, 7, 6, 12, 18],
+    #    "8": [28, 21, 24],
+    #    "5": [24, 4],
+    #    "0": [17],
+    #    "4": [3],
+    #    "6": [14],
+    #    "7": [13],
+    #    "11": [16],
+    #}
+    head_config = {}
     model_name = "meta-llama/Meta-Llama-3-8B-Instruct"
     autopasta = AutoPASTA(
         model_name=model_name,
@@ -236,11 +240,13 @@ def main():
         alpha=0.01,
     )
 
-    n_samples = args.n_samples
-    squad_dataset = QADatasetLoader.load_squad(n_samples=n_samples)
-    dataset = squad_dataset
+    dataset = ""
+    if args.dataset == "squad":
+        dataset = QADatasetLoader.load_squad(n_samples=args.n_samples, seed=args.seed)
+    elif args.dataset == "hotpotqa":
+        dataset = QADatasetLoader.load_hotpotqa(n_samples=args.n_samples)
 
-    predictions = autopasta.generate_all_preds(dataset, "squad")
+    predictions = autopasta.generate_all_preds(dataset, args.dataset)
     results, scores = QAEvaluator.evaluate(predictions, "results/autopasta.json")
     print(results)
     print(scores)

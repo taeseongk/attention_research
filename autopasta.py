@@ -1,13 +1,18 @@
 import torch
 import torch.nn as nn
-from typing import List
+
 from sentence_transformers import SentenceTransformer
 from transformers import AutoModelForCausalLM, AutoTokenizer
+
 import re
 import argparse
+import json
+from pathlib import Path
+from typing import List
+
 from tqdm import tqdm
-from eval.data import QADatasetLoader
-from eval.eval import QAEvaluator
+from data import QADatasetLoader
+from eval import QAEvaluator
 
 from pastalib.pasta import PASTA
 
@@ -106,8 +111,8 @@ class AutoPASTA(PASTA):
     def answer_with_steering(
         self,
         question: str,
-        context: str,
-        key_sentence: str,
+        context: List[str],
+        key_sentence: List[str],
         max_new_tokens: int = 50,
         temperature: float = 0.0,
     ) -> str:
@@ -122,11 +127,10 @@ class AutoPASTA(PASTA):
         inputs, offset_mapping = self.inputs_from_batch(
             text=[prompt], tokenizer=self.tokenizer, device="cuda"
         )
-
         with self.apply_steering(
             model=self.model,
             strings=[prompt],
-            substrings=[key_sentence],
+            substrings=key_sentence,
             model_input=inputs,
             offsets_mapping=offset_mapping,
         ) as steered_model:
@@ -145,34 +149,57 @@ class AutoPASTA(PASTA):
         )
         return answer.strip()
 
-    def answer_question(self, question: str, context: str, max_new_tokens: int = 50):
+    def answer_question(self, question: str, context: List[str], dataset_name: str, max_new_tokens: int = 50):
         """
         Complete AutoPASTA pipeline: Identify key sentence and answer with steering.
         """
 
-        # Step 1: Generate key sentence
-        key_sentence = self.generate_key_sentence(question, context)
-        # print(f"Key Sentence: {key_sentence}")
+        if dataset_name == "squad":
+            # Step 1: Generate key sentence
+            key_sentence = self.generate_key_sentence(question, context[0])
+            # print(f"Key Sentence: {key_sentence}")
 
-        # Step 2: Match to original context
-        matched_sentence, _ = self.match_to_context(key_sentence, context)
-        #print(f"Matched Sentence: {matched_sentence}")
+            # Step 2: Match to original context
+            matched_sentence, _ = self.match_to_context(key_sentence, context[0])
 
-        # Step 3: Answer with steering
-        answer = self.answer_with_steering(
-            question, context, matched_sentence, max_new_tokens
-        )
-        return answer
+            # Step 3: Answer with steering
+            answer = self.answer_with_steering(
+                question, context, [matched_sentence], max_new_tokens
+            )
+            return answer, [matched_sentence]
+        elif dataset_name == "hotpotqa":
+            key_sentences = []
+            for ctxt in context:
+                key_sentences.append(self.generate_key_sentence(question, ctxt))
+            matched_sentences = []
+            for i in range(len(context)):
+                matched_sentence, _ = self.match_to_context(key_sentences[i], context[i])
+                matched_sentences.append(matched_sentence)
+            #print(matched_sentences)
+            answer = self.answer_with_steering(
+                question, context, matched_sentences, max_new_tokens
+            )
+            return answer, [matched_sentences]
+
 
     def generate_all_preds(self, dataset, dataset_name: str):
         """Generate all predictions for the dataset"""
-
+        
+        samples = []
         predictions = []
         for example in tqdm(dataset, desc=f"Predicting {dataset_name}"):
-            prediction = self.answer_question(example["question"], example["context"])
+            prediction, matched_sentences = self.answer_question(example["question"], example["context"], dataset_name)
             print(f"Question: {example['question']}\n")
             print(f"Context: {example['context']}\n")
             print(f"Prediction: {prediction}\n")
+            samples.append(
+                {
+                    "id": example["id"],
+                    "question": example["question"],
+                    "context": example["context"],
+                    "key_sentence": matched_sentences
+                }
+            )
             predictions.append(
                 {
                     "id": example["id"],
@@ -182,7 +209,7 @@ class AutoPASTA(PASTA):
                     "gold": example["answers"],
                 }
             )
-        return predictions
+        return predictions, samples
 
     def _split_into_sentences(self, context: str) -> List[str]:
         """
@@ -204,15 +231,16 @@ Passage: {context}
 
 Sentence:"""
 
-    def _answer_prompt(self, question: str, context: str) -> str:
+    def _answer_prompt(self, question: str, context: List[str]) -> str:
         """Build prompt for direct answer generation."""
-        return f"""Answer the question below, paired with a context that provides background knowledge. Only output the answer without other context words.
-
-Context: {context}
-
+        prompt = f"""Answer the question below, paired with a context that provides background knowledge. Only output the answer without other context words.
+        
+Context: {" ".join(context)}
+        
 Question: {question}
-
+        
 Answer:"""
+        return prompt
 
 
 def main():
@@ -222,17 +250,14 @@ def main():
     parser.add_argument("--dataset", type=str, default="squad", choices=["squad", "hotpotqa"], help="Dataset to use")
     args = parser.parse_args()
 
-    #head_config = {
-    #    "3": [17, 7, 6, 12, 18],
-    #    "8": [28, 21, 24],
-    #    "5": [24, 4],
-    #    "0": [17],
-    #    "4": [3],
-    #    "6": [14],
-    #    "7": [13],
-    #    "11": [16],
-    #}
-    head_config = {}
+    head_config = {
+        26: [0, 8, 16, 24],
+        27: [4, 12, 20, 28],
+        28: [2, 10, 18, 26],
+        29: [6, 14, 22, 30],
+        30: [1, 9, 17, 25],
+        31: [3, 11, 19, 27],
+    } 
     model_name = "meta-llama/Meta-Llama-3-8B-Instruct"
     autopasta = AutoPASTA(
         model_name=model_name,
@@ -246,8 +271,11 @@ def main():
     elif args.dataset == "hotpotqa":
         dataset = QADatasetLoader.load_hotpotqa(n_samples=args.n_samples)
 
-    predictions = autopasta.generate_all_preds(dataset, args.dataset)
-    results, scores = QAEvaluator.evaluate(predictions, "results/autopasta.json")
+    predictions, samples = autopasta.generate_all_preds(dataset, args.dataset)
+    path = Path(f"samples/{args.dataset}/autopasta_{args.n_samples}_{args.seed}.json")
+    with open(path, "w") as f:
+        json.dump({"samples": samples}, f, indent=2)
+    results, scores = QAEvaluator.evaluate(predictions, f"results/{args.dataset}/autopasta.json")
     print(results)
     print(scores)
 

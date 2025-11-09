@@ -1,9 +1,14 @@
 import torch
+
 import argparse
-from transformers import AutoTokenizer, AutoModelForCausalLM
-from eval.data import QADatasetLoader
-from eval.eval import QAEvaluator
+from typing import List
 from tqdm import tqdm
+import json
+from pathlib import Path
+
+from transformers import AutoTokenizer, AutoModelForCausalLM
+from data import QADatasetLoader
+from eval import QAEvaluator
 
 
 class Baseline:
@@ -25,26 +30,16 @@ class Baseline:
         self.model.eval()
         print(f"Model loaded on {device}")
 
-    def create_prompt(self, question: str, context: str, dataset_name: str):
+    def create_prompt(self, question: str, context: List[str]):
         """
         Create prompt for the model
         """
-        prompt = ""
-        if dataset_name == "squad":
-            prompt = f"""Answer the question below, paired with a context that provides background knowledge. Only output the answer without other context words.
+        prompt = f"""Answer the question below, paired with a context that provides background knowledge. Only output the answer without other context words.
 
-Context: {context}
+Context: {" ".join(context)}
 
 Question: {question}
 
-Answer:"""
-        elif dataset_name == "hotpot_qa":
-            prompt = f"""Answer the question below, paired with a context that provides background knowledge. Only output the answer without other context words.
-        
-Context: {context}
-        
-Question: {question}
-        
 Answer:"""
         return prompt
 
@@ -72,16 +67,24 @@ Answer:"""
 
     def generate_all_preds(self, dataset, dataset_name: str):
         """Generate all predictions for the dataset"""
-
+        samples = []
         predictions = []
         for example in tqdm(dataset, desc=f"Predicting {dataset_name}"):
             prompt = self.create_prompt(
-                example["question"], example["context"], dataset_name
+                example["question"],
+                example["context"]
             )
             prediction = self.generate_pred(prompt)
             print(f"Question: {example['question']}\n")
             print(f"Context: {example['context']}\n")
             print(f"Prediction: {prediction}\n")
+            samples.append(
+                {
+                    "id": example["id"],
+                    "question": example["question"],
+                    "context": example["context"]
+                }
+            )
             predictions.append(
                 {
                     "id": example["id"],
@@ -91,7 +94,7 @@ Answer:"""
                     "gold": example["answers"],
                 }
             )
-        return predictions
+        return predictions, samples
 
 
 def main():
@@ -110,10 +113,13 @@ def main():
     if args.dataset == "squad":
         dataset = QADatasetLoader.load_squad(n_samples=args.n_samples, seed=args.seed)
     elif args.dataset == "hotpotqa":
-        dataset = QADatasetLoader.load_hotpotqa(n_samples=args.n_samples)
+        dataset = QADatasetLoader.load_hotpotqa(n_samples=args.n_samples, seed=args.seed)
 
-    predictions = predictor.generate_all_preds(dataset, args.dataset)
-    results, scores = QAEvaluator.evaluate(predictions, "results/baseline.json")
+    predictions, samples = predictor.generate_all_preds(dataset, args.dataset)
+    path = Path(f"samples/{args.dataset}/baseline_{args.n_samples}_{args.seed}")
+    with open(path, "w") as f:
+        json.dump({"samples": samples}, f, indent=2)
+    results, scores = QAEvaluator.evaluate(predictions, f"results/{args.dataset}/baseline.json")
     print(results)
     print(scores)
 

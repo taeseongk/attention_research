@@ -7,16 +7,17 @@ import json
 from pathlib import Path
 
 from transformers import AutoTokenizer, AutoModelForCausalLM
+
 from data import QADatasetLoader
 from eval import QAEvaluator
+from util import answer_prompt
 
 
 class Baseline:
-    def __init__(self, model_name: str, device: str = "cuda"):
-        print(f"Loading model: {model_name}")
-        self.model_name = model_name
-        self.device = device
-
+    """
+    Baseline Method
+    """
+    def __init__(self, model_name: str):
         self.model = AutoModelForCausalLM.from_pretrained(
             model_name,
             attn_implementation="eager",
@@ -26,58 +27,21 @@ class Baseline:
         )
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.tokenizer.pad_token = self.tokenizer.eos_token
+        self.device = "cuda"
 
-        self.model.eval()
-        print(f"Model loaded on {device}")
+    
+    def generate_pred(self, question: str, context: List[str], dataset_name: str):
+        prompt = answer_prompt(question, context, "baseline")
+        print(f"Prompt:\n{prompt}")
+        return self._generate(prompt)
 
-    def create_prompt(self, question: str, context: List[str]):
-        """
-        Create prompt for the model
-        """
-        prompt = f"""Answer the question below, paired with a context that provides background knowledge. Only output the answer without other context words.
-
-Context: {" ".join(context)}
-
-Question: {question}
-
-Answer:"""
-        return prompt
-
-    def generate_pred(self, prompt: str, max_new_tokens: int = 50):
-        """Generate prediction from model"""
-        inputs = self.tokenizer(
-            prompt, return_tensors="pt", truncation=True, max_length=2048
-        )
-        inputs = {k: v.to(self.device) for k, v in inputs.items()}
-
-        with torch.no_grad():
-            outputs = self.model.generate(
-                **inputs,
-                max_new_tokens=max_new_tokens,
-                do_sample=False,  # Greedy decoding
-                pad_token_id=self.tokenizer.pad_token_id,
-            )
-
-        # Decode only the new tokens
-        generated_text = self.tokenizer.decode(
-            outputs[0][inputs["input_ids"].shape[1] :], skip_special_tokens=True
-        )
-
-        return generated_text.strip()
-
+        
     def generate_all_preds(self, dataset, dataset_name: str):
-        """Generate all predictions for the dataset"""
         samples = []
         predictions = []
         for example in tqdm(dataset, desc=f"Predicting {dataset_name}"):
-            prompt = self.create_prompt(
-                example["question"],
-                example["context"]
-            )
-            prediction = self.generate_pred(prompt)
-            print(f"Question: {example['question']}\n")
-            print(f"Context: {example['context']}\n")
-            print(f"Prediction: {prediction}\n")
+            prediction = self.generate_pred(example["question"], example["context"], dataset_name)
+            print(f"{prediction}\n")
             samples.append(
                 {
                     "id": example["id"],
@@ -96,33 +60,58 @@ Answer:"""
             )
         return predictions, samples
 
+    def _generate(
+        self,
+        prompt: str,
+        max_new_tokens: int = 50
+    ):
+        messages = [{"role": "user", "content": prompt}]
+        prompt = self.tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=True
+        )
+        inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
+
+        with torch.no_grad():
+            outputs = self.model.generate(
+                **inputs,
+                max_new_tokens=max_new_tokens,
+                do_sample=False,
+                pad_token_id=self.tokenizer.pad_token_id,
+            )
+
+        generated_text = self.tokenizer.decode(
+            outputs[0][inputs["input_ids"].shape[1] :], skip_special_tokens=True
+        )
+        return generated_text.strip()
+
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--n_samples", type=int, default=20, help="Number of samples")
     parser.add_argument("--seed", type=int, default=None, help="Random Seed for dataset sampling")
-    parser.add_argument("--dataset", type=str, default="squad", choices=["squad", "hotpotqa"], help="Dataset to use")
+    parser.add_argument("--dataset", type=str, default="squad", choices=["squad", "hotpotqa", "nq"], help="Dataset to use")
     args = parser.parse_args()
-    # model_name = "huggyllama/llama-7b"
-    # model_name = "meta-llama/Meta-Llama-3-8B"
-    model_name = "meta-llama/Meta-Llama-3-8B-Instruct"
-    # model_name = "lmsys/vicuna-7b-v1.5"
-    predictor = Baseline(model_name=model_name)
 
-    dataset = ""
+    model_name = "meta-llama/Meta-Llama-3-8B-Instruct"
+    baseline = Baseline(model_name=model_name)
+
     if args.dataset == "squad":
         dataset = QADatasetLoader.load_squad(n_samples=args.n_samples, seed=args.seed)
     elif args.dataset == "hotpotqa":
         dataset = QADatasetLoader.load_hotpotqa(n_samples=args.n_samples, seed=args.seed)
+    elif args.dataset == "nq":
+        dataset = QADatasetLoader.load_natural_questions_mrqa(n_samples=args.n_samples, seed=args.seed)
+    else:
+        dataset = {}
 
-    predictions, samples = predictor.generate_all_preds(dataset, args.dataset)
-    path = Path(f"samples/{args.dataset}/baseline_{args.n_samples}_{args.seed}")
+    predictions, samples = baseline.generate_all_preds(dataset, args.dataset)
+    path = Path(f"samples/{args.dataset}/baseline_{args.seed}_{args.n_samples}.json")
     with open(path, "w") as f:
         json.dump({"samples": samples}, f, indent=2)
-    results, scores = QAEvaluator.evaluate(predictions, f"results/{args.dataset}/baseline.json")
-    print(results)
+    _, scores = QAEvaluator.evaluate(predictions, f"results/{args.dataset}/baseline.json")
     print(scores)
-
 
 if __name__ == "__main__":
     main()

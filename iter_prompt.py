@@ -6,29 +6,18 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 import argparse
 import json
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 from tqdm import tqdm
 
 from data import QADatasetLoader
 from eval import QAEvaluator
 from util import key_sentence_prompt, split_into_sentences, answer_prompt
 
-from pastalib.pasta import PASTA
-
-
-class AutoPASTA(PASTA):
+class IterPrompt:
     """
-    AutoPASTA: Automatic Post-hoc Attention Steering Approach
+    Iterative Prompting Method from AutoPASTA Paper
     """
-
-    def __init__(
-        self,
-        model_name,
-        head_config: dict | list | None = None,
-        alpha: float = 0.01,
-        scale_position: str = "exclude",
-        encoder_model: str = "sentence-transformers/all-MiniLM-L6-v2",
-    ):
+    def __init__(self, model_name, encoder_model: str = "sentence-transformers/all-MiniLM-L6-v2"):
         self.model = AutoModelForCausalLM.from_pretrained(
             model_name,
             attn_implementation="eager",
@@ -38,31 +27,17 @@ class AutoPASTA(PASTA):
         )
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.tokenizer.pad_token = self.tokenizer.eos_token
-        super().__init__(
-            model=self.model,
-            tokenizer=self.tokenizer,
-            head_config=head_config,
-            alpha=alpha,
-            scale_position=scale_position,
-        )
         self.device = "cuda"
         self.encoder = SentenceTransformer(encoder_model)
 
     def generate_key_sentence(
-        self,
-        question: str,
-        context: str,
-        max_new_tokens: int = 100
+        self, question: str, context: str, max_new_tokens: int = 100
     ):
         prompt = key_sentence_prompt(question, context)
-        return self._generate(prompt, False, None, max_new_tokens)
+        return self._generate(prompt, max_new_tokens)
 
-    def match_to_context(
-        self,
-        key_sentence: str,
-        context: str,
-    ):
-        context_sentences = split_into_sentences(context)
+    def match_to_context(self, key_sentence: str, context: str):
+        context_sentences = split_into_sentences(context) 
         key_sentence_embd = self.encoder.encode(
             key_sentence, convert_to_tensor=True, device=self.device
         )
@@ -79,30 +54,33 @@ class AutoPASTA(PASTA):
 
         return best_sentence, best_idx
 
-    def generate_pred(self, question: str, context: List[str], dataset_name: str):
+    def generate_pred(
+        self,
+        question: str,
+        context: List[str],
+        dataset_name: str
+    ):
         if dataset_name == "squad" or dataset_name == "nq":
             key_sentence = self.generate_key_sentence(question, context[0])
             matched_sentence, _ = self.match_to_context(key_sentence, context[0])
-            prompt = answer_prompt(question, context, "autopasta")
+            prompt = answer_prompt(question, context, "iter_prompt", [matched_sentence])
             print(f"Prompt:\n{prompt}")
-            answer = self._generate(prompt, True, [matched_sentence])
+            answer = self._generate(prompt)
             return answer, [key_sentence], [matched_sentence]
 
         elif dataset_name == "hotpotqa":
-            key_sentences = []
+            key_sentences= []
             for ctxt in context:
                 key_sentences.append(self.generate_key_sentence(question, ctxt))
             matched_sentences = []
             for i in range(len(context)):
                 matched_sentence, _ = self.match_to_context(key_sentences[i], context[i])
                 matched_sentences.append(matched_sentence)
-            prompt = answer_prompt(question, context, "autopasta")
+            prompt = answer_prompt(question, context, "iter_prompt", matched_sentences)
             print(f"Prompt:\n{prompt}")
-            answer = self._generate(prompt, True, matched_sentences)
+            answer = self._generate(prompt)
             return answer, key_sentences, matched_sentences
-
         return "", [], []
-
 
     def generate_all_preds(self, dataset, dataset_name: str):
         samples = []
@@ -125,7 +103,7 @@ class AutoPASTA(PASTA):
                     "question": example["question"],
                     "context": example["context"],
                     "prediction": prediction,
-                    "gold": example["answers"],
+                    "gold": example["answers"]
                 }
             )
         return predictions, samples
@@ -133,8 +111,6 @@ class AutoPASTA(PASTA):
     def _generate(
         self,
         prompt: str,
-        with_steer: bool,
-        key_sentence: Optional[List[str]] = None,
         max_new_tokens: int = 50
     ):
         messages = [{"role": "user", "content": prompt}]
@@ -143,35 +119,15 @@ class AutoPASTA(PASTA):
             tokenize=False,
             add_generation_prompt=True
         )
+        inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
 
-        if with_steer and key_sentence:
-            inputs, offset_mapping = self.inputs_from_batch(
-                text=[prompt], tokenizer=self.tokenizer, device=self.device
+        with torch.no_grad():
+            outputs = self.model.generate(
+                **inputs,
+                max_new_tokens=max_new_tokens,
+                do_sample=False,
+                pad_token_id=self.tokenizer.pad_token_id,
             )
-            with self.apply_steering(
-                model=self.model,
-                strings=[prompt],
-                substrings=key_sentence,
-                model_input=inputs,
-                offsets_mapping=offset_mapping
-            ) as steered_model:
-                with torch.no_grad():
-                    outputs = steered_model.generate(
-                        **inputs,
-                        max_new_tokens=max_new_tokens,
-                        do_sample=False,
-                        pad_token_id=self.tokenizer.pad_token_id,
-                    )
-        else:
-            inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
-
-            with torch.no_grad():
-                outputs = self.model.generate(
-                    **inputs,
-                    max_new_tokens=max_new_tokens,
-                    do_sample=False,
-                    pad_token_id=self.tokenizer.pad_token_id,
-                )
 
         generated_text = self.tokenizer.decode(
             outputs[0][inputs["input_ids"].shape[1] :], skip_special_tokens=True
@@ -186,14 +142,8 @@ def main():
     args = parser.parse_args()
 
     model_name = "meta-llama/Meta-Llama-3-8B-Instruct"
-    head_config = {
-        30: [0, 8, 16, 24],
-        31: [4, 12, 20, 28],
-    }
-    autopasta = AutoPASTA(
-        model_name=model_name,
-        head_config=head_config,
-        alpha=0.01,
+    iter_prompt = IterPrompt(
+        model_name=model_name
     )
 
     if args.dataset == "squad":
@@ -205,11 +155,11 @@ def main():
     else:
         dataset = {}
 
-    predictions, samples = autopasta.generate_all_preds(dataset, args.dataset)
-    path = Path(f"samples/{args.dataset}/autopasta_{args.seed}_{args.n_samples}.json")
+    predictions, samples = iter_prompt.generate_all_preds(dataset, args.dataset)
+    path = Path(f"samples/{args.dataset}/iter_prompt_{args.seed}_{args.n_samples}.json")
     with open(path, "w") as f:
         json.dump({"samples": samples}, f, indent=2)
-    _, scores = QAEvaluator.evaluate(predictions, f"results/{args.dataset}/autopasta.json")
+    _, scores = QAEvaluator.evaluate(predictions, f"results/{args.dataset}/iter_prompt.json")
     print(scores)
 
 if __name__ == "__main__":

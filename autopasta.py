@@ -186,9 +186,13 @@ def main():
     args = parser.parse_args()
 
     model_name = "meta-llama/Meta-Llama-3-8B-Instruct"
+    #head_config = {
+    #    30: [0, 8, 16, 24],
+    #    31: [4, 12, 20, 28],
+    #}
     head_config = {
-        30: [0, 8, 16, 24],
-        31: [4, 12, 20, 28],
+        layer: list(range(32))
+        for layer in range(32)
     }
     autopasta = AutoPASTA(
         model_name=model_name,
@@ -209,7 +213,7 @@ def main():
     path = Path(f"samples/{args.dataset}/autopasta_{args.seed}_{args.n_samples}.json")
     with open(path, "w") as f:
         json.dump({"samples": samples}, f, indent=2)
-    _, scores = QAEvaluator.evaluate(predictions, f"results/{args.dataset}/autopasta.json")
+    _, scores = QAEvaluator.evaluate(predictions, True, f"results/{args.dataset}/autopasta.json")
     print(scores)
 
 if __name__ == "__main__":

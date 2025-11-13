@@ -49,10 +49,7 @@ class AutoPASTA(PASTA):
         self.encoder = SentenceTransformer(encoder_model)
 
     def generate_key_sentence(
-        self,
-        question: str,
-        context: str,
-        max_new_tokens: int = 100
+        self, question: str, context: str, max_new_tokens: int = 100
     ):
         prompt = key_sentence_prompt(question, context)
         return self._generate(prompt, False, None, max_new_tokens)
@@ -94,7 +91,9 @@ class AutoPASTA(PASTA):
                 key_sentences.append(self.generate_key_sentence(question, ctxt))
             matched_sentences = []
             for i in range(len(context)):
-                matched_sentence, _ = self.match_to_context(key_sentences[i], context[i])
+                matched_sentence, _ = self.match_to_context(
+                    key_sentences[i], context[i]
+                )
                 matched_sentences.append(matched_sentence)
             prompt = answer_prompt(question, context, "autopasta")
             print(f"Prompt:\n{prompt}")
@@ -103,12 +102,13 @@ class AutoPASTA(PASTA):
 
         return "", [], []
 
-
     def generate_all_preds(self, dataset, dataset_name: str):
         samples = []
         predictions = []
         for example in tqdm(dataset, desc=f"Predicting {dataset_name}"):
-            prediction, key_sentences, matched_sentences = self.generate_pred(example["question"], example["context"], dataset_name)
+            prediction, key_sentences, matched_sentences = self.generate_pred(
+                example["question"], example["context"], dataset_name
+            )
             print(f"{prediction}\n")
             samples.append(
                 {
@@ -116,7 +116,7 @@ class AutoPASTA(PASTA):
                     "question": example["question"],
                     "context": example["context"],
                     "key_sentence": key_sentences,
-                    "matched_sentence": matched_sentences
+                    "matched_sentence": matched_sentences,
                 }
             )
             predictions.append(
@@ -135,13 +135,11 @@ class AutoPASTA(PASTA):
         prompt: str,
         with_steer: bool,
         key_sentence: Optional[List[str]] = None,
-        max_new_tokens: int = 50
+        max_new_tokens: int = 50,
     ):
         messages = [{"role": "user", "content": prompt}]
         prompt = self.tokenizer.apply_chat_template(
-            messages,
-            tokenize=False,
-            add_generation_prompt=True
+            messages, tokenize=False, add_generation_prompt=True
         )
 
         if with_steer and key_sentence:
@@ -153,7 +151,7 @@ class AutoPASTA(PASTA):
                 strings=[prompt],
                 substrings=key_sentence,
                 model_input=inputs,
-                offsets_mapping=offset_mapping
+                offsets_mapping=offset_mapping,
             ) as steered_model:
                 with torch.no_grad():
                     outputs = steered_model.generate(
@@ -178,22 +176,28 @@ class AutoPASTA(PASTA):
         )
         return generated_text.strip()
 
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--n_samples", type=int, default=20, help="Number of samples")
-    parser.add_argument("--seed", type=int, default=None, help="Random Seed for dataset sampling")
-    parser.add_argument("--dataset", type=str, default="squad", choices=["squad", "hotpotqa", "nq"], help="Dataset to use")
+    parser.add_argument(
+        "--seed", type=int, default=None, help="Random Seed for dataset sampling"
+    )
+    parser.add_argument(
+        "--dataset",
+        type=str,
+        default="squad",
+        choices=["squad", "hotpotqa", "nq"],
+        help="Dataset to use",
+    )
     args = parser.parse_args()
 
     model_name = "meta-llama/Meta-Llama-3-8B-Instruct"
-    #head_config = {
+    # head_config = {
     #    30: [0, 8, 16, 24],
     #    31: [4, 12, 20, 28],
-    #}
-    head_config = {
-        layer: list(range(32))
-        for layer in range(32)
-    }
+    # }
+    head_config = {layer: list(range(32)) for layer in range(32)}
     autopasta = AutoPASTA(
         model_name=model_name,
         head_config=head_config,
@@ -203,9 +207,13 @@ def main():
     if args.dataset == "squad":
         dataset = QADatasetLoader.load_squad(n_samples=args.n_samples, seed=args.seed)
     elif args.dataset == "hotpotqa":
-        dataset = QADatasetLoader.load_hotpotqa(n_samples=args.n_samples, seed=args.seed)
+        dataset = QADatasetLoader.load_hotpotqa(
+            n_samples=args.n_samples, seed=args.seed
+        )
     elif args.dataset == "nq":
-        dataset = QADatasetLoader.load_natural_questions_mrqa(n_samples=args.n_samples, seed=args.seed)
+        dataset = QADatasetLoader.load_natural_questions_mrqa(
+            n_samples=args.n_samples, seed=args.seed
+        )
     else:
         dataset = {}
 
@@ -213,8 +221,11 @@ def main():
     path = Path(f"samples/{args.dataset}/autopasta_{args.seed}_{args.n_samples}.json")
     with open(path, "w") as f:
         json.dump({"samples": samples}, f, indent=2)
-    _, scores = QAEvaluator.evaluate(predictions, True, f"results/{args.dataset}/autopasta.json")
+    _, scores = QAEvaluator.evaluate(
+        predictions, True, f"results/{args.dataset}/autopasta.json"
+    )
     print(scores)
+
 
 if __name__ == "__main__":
     main()

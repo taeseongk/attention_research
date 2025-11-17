@@ -159,7 +159,15 @@ def main():
     path = Path(f"samples/{args.dataset}/iter_prompt_{args.seed}_{args.n_samples}.json")
     with open(path, "w") as f:
         json.dump({"samples": samples}, f, indent=2)
-    _, scores = QAEvaluator.evaluate(predictions, f"results/{args.dataset}/iter_prompt.json")
+
+    config = {
+        "dataset": args.dataset,
+        "method": "iter_prompt",
+        "seed": args.seed,
+        "n_samples": args.n_samples,
+    }
+
+    _, scores = QAEvaluator.evaluate(predictions, True, config)
     print(scores)
 
 if __name__ == "__main__":

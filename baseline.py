@@ -89,9 +89,9 @@ class Baseline:
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--n_samples", type=int, default=20, help="Number of samples")
+    parser.add_argument("--n_samples", type=int, default=None, help="Number of samples")
     parser.add_argument("--seed", type=int, default=None, help="Random Seed for dataset sampling")
-    parser.add_argument("--dataset", type=str, default="squad", choices=["squad", "hotpotqa", "nq"], help="Dataset to use")
+    parser.add_argument("--dataset", type=str, choices=["squad", "hotpotqa", "nq"], help="Dataset to use")
     args = parser.parse_args()
 
     model_name = "meta-llama/Meta-Llama-3-8B-Instruct"
@@ -104,13 +104,20 @@ def main():
     elif args.dataset == "nq":
         dataset = QADatasetLoader.load_natural_questions_mrqa(n_samples=args.n_samples, seed=args.seed)
     else:
-        dataset = {}
+        raise ValueError(f"Unknown dataset: {args.dataset}")
 
     predictions, samples = baseline.generate_all_preds(dataset, args.dataset)
     path = Path(f"samples/{args.dataset}/baseline_{args.seed}_{args.n_samples}.json")
     with open(path, "w") as f:
         json.dump({"samples": samples}, f, indent=2)
-    _, scores = QAEvaluator.evaluate(predictions, f"results/{args.dataset}/baseline.json")
+
+    config = {
+        "dataset": args.dataset,
+        "method": "baseline",
+        "seed": args.seed,
+        "n_samples": args.n_samples,
+    }
+    _, scores = QAEvaluator.evaluate(predictions, True, config)
     print(scores)
 
 if __name__ == "__main__":

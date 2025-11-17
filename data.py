@@ -16,7 +16,7 @@ class QADatasetLoader:
     """Load and prepare different QA datasets"""
 
     @staticmethod
-    def load_squad(split="validation", n_samples=100, seed=None):
+    def load_squad(split="validation", n_samples=None, seed=None):
         """
         Load SQuAD dataset
         SQuAD: Reading comprehension dataset with questions based on Wikipedia
@@ -51,7 +51,7 @@ class QADatasetLoader:
         return formatted_data
 
     @staticmethod
-    def load_hotpotqa(split="validation", n_samples=100, seed=None):
+    def load_hotpotqa(split="validation", n_samples=None, seed=None):
         """
         Load HotpotQA dataset
         HotpotQA: Multi-hop question answering dataset
@@ -92,7 +92,7 @@ class QADatasetLoader:
         return formatted_data
 
     @staticmethod
-    def load_natural_questions_mrqa(split="dev", n_samples=100, seed=None):
+    def load_natural_questions_mrqa(split="dev", n_samples=None, seed=None):
         """Load MRQA version of NQ"""
         print(f"Loading Natural Questions dataset (MRQA {split})...")
 

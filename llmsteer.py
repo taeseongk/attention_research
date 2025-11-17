@@ -5,7 +5,15 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from dataclasses import dataclass
 from collections import defaultdict
 from functools import partial
+from typing import List
+from pathlib import Path
+import copy
+import argparse
+import json
+from tqdm import tqdm
 
+from data import QADatasetLoader
+from eval import QAEvaluator
 
 @dataclass
 class LLMSteerConfig:
@@ -36,16 +44,19 @@ class LLMSteer:
         )
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.tokenizer.pad_token = self.tokenizer.eos_token
+        self.special_token_ids = set(self.tokenizer.all_special_ids)
         self.device = "cuda"
 
         self.attn_scores_1 = defaultdict(lambda: defaultdict(list))
         self.attn_scores_2 = defaultdict(lambda: defaultdict(list))
         self.ctxt_len = None
         self.sel_tokens = {}
-        self.special_token_ids = set(self.tokenizer.all_special_ids)
 
         self.cached_kv = None
         self.cached_text = None
+        self.original_cached_kv = None
+
+        self.last_context = None
 
         
     def compute_steering_matrices(self, context: str):
@@ -161,10 +172,51 @@ class LLMSteer:
         
         self.cached_text, self.cached_kv = collect_attn_scores(context, is_first_pass=True, cache_kv=True)
         collect_attn_scores(context, is_first_pass=False, cache_kv=False)
-
         self.compute_steering_matrices(context)
+        self.original_cached_kv = copy.deepcopy(self.cached_kv)
 
-    def generate(self, question: str, max_new_tokens: int = 50, **generate_kwargs):
+    def generate_pred(self, question: str, context: List[str], dataset_name: str):
+        context_text = ""
+        if dataset_name == "squad" or dataset_name == "nq":
+            context_text = context[0]
+        elif dataset_name == "hotpotqa":
+            context_text = "\n\n".join(context)
+        if self.last_context is None or self.last_context != context_text:
+            self.contextual_rereading(context_text)
+            self.last_context = context_text
+
+        answer = self._generate(question, max_new_tokens=50, temeprature=0.0)
+
+    def generate_all_preds(self, dataset, dataset_name: str):
+        samples = []
+        predictions = []
+
+        context_groups = defaultdict(list)
+        for example in dataset:
+            context_key = "\n\n".join(example["context"])
+            context_groups[context_key].append(example)
+
+        print(f"Processing {len(context_groups)} unique contexts...")
+
+        for context_text, examples in tqdm(context_groups.items(), desc=f"Contexts"):
+            print(f"Preparing context ({len(examples)} questions on this context)")
+            self.contextual_rereading(context_text)
+            for example in examples:
+                answer = self._generate(example["question"], max_new_tokens=50, temperature=0.0)
+                print(f"\nQ: {example['question']}")
+                print(f"A: {answer}")
+
+                predictions.append({
+                    "id": example["id"],
+                    "question": example["question"],
+                    "context": example["context"],
+                    "prediction": answer,
+                    "gold": example["answers"],
+                })
+        return predictions, samples
+
+
+    def _generate(self, question: str, max_new_tokens: int = 50, **generate_kwargs):
         def hook(module: torch.nn.Module, input, output, layer_idx):
 
             if not isinstance(output, tuple) or len(output) < 2:
@@ -183,11 +235,7 @@ class LLMSteer:
             if len(sel_token_indices) == 0:
                 return output
            
-            #print(attn_weights)
-            #print(attn_weights.shape)
-
             batch_size, num_heads, seq_len, total_len = attn_weights.shape
-            cache_len = self.cached_kv[0][0].shape[2] if self.cached_kv else 0
 
             M = torch.ones(seq_len, total_len, device=attn_weights.device)
             for token_idx in sel_token_indices:
@@ -196,10 +244,7 @@ class LLMSteer:
 
             M = M.unsqueeze(0).unsqueeze(0)
             attn_weights_steered = attn_weights * M
-            attn_weights_steered = torch.nn.functional.softmax(
-                attn_weights_steered, dim=-1
-            )
-        
+            attn_weights_steered = attn_weights_steered / attn_weights_steered.sum(dim=-1, keepdim=True)
             return (attn_output, attn_weights_steered) + output[2:]
             
         question_content = f"{question}\n\nAnswer:"
@@ -213,12 +258,6 @@ class LLMSteer:
         question_input_ids = full_tokens.input_ids[:, cache_len:]
 
 
-        #print(f"Cache length: {cache_len}")
-        #print(f"New input length: {new_input_ids.shape[1]}")
-        #print(f"New input text: '{self.tokenizer.decode(new_input_ids[0])}'")
-        #print(f"Total attention mask length: {attn_mask.shape[1]}")
-
-
         registered_hooks = []
         for layer_idx, layer in enumerate(self.model.model.layers):
             hook_func = partial(
@@ -228,9 +267,9 @@ class LLMSteer:
             registered_hook = layer.self_attn.register_forward_hook(hook_func)
             registered_hooks.append(registered_hook)
 
+        past_kv = copy.deepcopy(self.original_cached_kv)
         try:
             current_input_ids = question_input_ids
-            past_kv = self.cached_kv
             generated_ids = []
             temperature = generate_kwargs.get('temperature', 1.0)
 
@@ -288,28 +327,53 @@ class LLMSteer:
 
 
 def main():
-    model_name = "meta-llama/Meta-Llama-3-8B-Instruct"
-    config = LLMSteerConfig(alpha=2.0, top_k=10, filter_special_tokens=True)
-    llmsteer = LLMSteer(config, model_name)
-    context = """
-The Eiffel Tower was built by Gustave Eiffel for the 1889 World's Fair in Paris.
-It stands 330 meters tall and was the tallest man-made structure in the world until 1930.
-The tower has three levels for visitors, with restaurants on the first and second levels.
-Approximately 7 million people visit the Eiffel Tower every year, making it one of the 
-most visited paid monuments in the world.
-""".strip()
-    llmsteer.contextual_rereading(context)
+    parser = argparse.ArgumentParser() 
+    parser.add_argument("--n_samples", type=int, default=None, help="Number of samples")
+    parser.add_argument(
+        "--seed", type=int, default=None, help="Random Seed for dataset sampling"
+    )
+    parser.add_argument(
+        "--dataset",
+        type=str,
+        choices=["squad", "hotpotqa", "nq"],
+        help="Dataset to use",
+    )
+    parser.add_argument("--alpha", type=float, default=2.0, help="Steering strength")
+    parser.add_argument("--top_k", type=int, default=10, help="Top-k tokens to steer")
+    args = parser.parse_args()
 
-    queries = [
-        "How tall is the Eiffel Tower?",
-        "Who built it?",
-        "How many people visit each year?",
-    ]
-    
-    for query in queries:
-        print(f"\nQ: {query}")
-        answer = llmsteer.generate(query, max_new_tokens=30, temperature=0.1)
-        print(f"A: {answer}")
+    model_name = "meta-llama/Meta-Llama-3-8B-Instruct"
+    config = LLMSteerConfig(alpha=args.alpha, top_k=args.top_k, filter_special_tokens=False)
+    llmsteer = LLMSteer(config, model_name)
+
+    if args.dataset == "squad":
+        dataset = QADatasetLoader.load_squad(n_samples=args.n_samples, seed=args.seed)
+    elif args.dataset == "hotpotqa":
+        dataset = QADatasetLoader.load_hotpotqa(
+            n_samples=args.n_samples, seed=args.seed
+        )
+    elif args.dataset == "nq":
+        dataset = QADatasetLoader.load_natural_questions_mrqa(
+            n_samples=args.n_samples, seed=args.seed
+        )
+    else:
+        raise ValueError(f"Unknown dataset: {args.dataset}")
+
+    predictions, samples = llmsteer.generate_all_preds(dataset, args.dataset)
+
+    config = {
+        "dataset": args.dataset,
+        "method": "llmsteer",
+        "seed": args.seed,
+        "n": args.n_samples,
+        "alpha": args.alpha,
+        "top_k": args.top_k
+    }
+
+    _, scores = QAEvaluator.evaluate(
+        predictions, True, config 
+    )
+    print(scores)
 
 if __name__ == "__main__":
     main()

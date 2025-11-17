@@ -3,6 +3,7 @@ import json
 import string
 from collections import Counter
 from pathlib import Path
+from typing import Dict
 
 
 class QAMetrics:
@@ -65,7 +66,7 @@ class QAEvaluator:
     """Evaluate QA models on different datasets"""
 
     @staticmethod
-    def evaluate(predictions, save_file: bool, output_path: str):
+    def evaluate(predictions, save_file: bool, config: Dict[str, str]):
         results = []
         exact_scores = []
         f1_scores = []
@@ -98,6 +99,14 @@ class QAEvaluator:
         aggr_exact_score = sum(exact_scores) / len(exact_scores) * 100
         aggr_f1_score = sum(f1_scores) / len(f1_scores) * 100
         scores = {"aggr_exact_score": aggr_exact_score, "aggr_f1_score": aggr_f1_score}
+
+        output_path = f"results/{config['dataset']}/{config['method']}/"
+        for key, value in config.items():
+            if key == 'dataset' or key == 'method':
+                continue
+            output_path += f"{key}{value}_"
+        output_path += ".json"
+
         if save_file:
             QAEvaluator.save_results(results, scores, output_path)
         return results, scores

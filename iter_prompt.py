@@ -156,9 +156,6 @@ def main():
         dataset = {}
 
     predictions, samples = iter_prompt.generate_all_preds(dataset, args.dataset)
-    path = Path(f"samples/{args.dataset}/iter_prompt_{args.seed}_{args.n_samples}.json")
-    with open(path, "w") as f:
-        json.dump({"samples": samples}, f, indent=2)
 
     config = {
         "dataset": args.dataset,
@@ -166,7 +163,7 @@ def main():
         "seed": args.seed,
         "n_samples": args.n_samples,
     }
-
+    QAEvaluator.save_samples(samples, config)
     _, scores = QAEvaluator.evaluate(predictions, True, config)
     print(scores)
 

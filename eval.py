@@ -112,8 +112,31 @@ class QAEvaluator:
         return results, scores
 
     @staticmethod
-    def save_results(results, scores, output_path: str):
+    def save_results(results, scores, config):
+        output_path = f"results/{config['dataset']}/{config['method']}"
+        for key, value in config.items():
+            if key == 'dataset' or key == 'method':
+                continue
+            output_path += f"{key}{value}_"
+        output_path += ".json"
+        
         path = Path(output_path)
+        path.mkdir(parents=True, exist_ok=True)
         save_data = {"results": results, "scores": scores}
+        with open(path, "w") as f:
+            json.dump(save_data, f, indent=2)
+
+    @staticmethod
+    def save_samples(samples, config):
+        output_path = f"samples/{config['dataset']}/{config['method']}"
+        for key, value in config.items():
+            if key == 'dataset' or key == 'method':
+                continue
+            output_path += f"{key}{value}_"
+        output_path += ".json"
+
+        path = Path(output_path)
+        path.mkdir(parents=True, exist_ok=True)
+        save_data = {"samples": samples}
         with open(path, "w") as f:
             json.dump(save_data, f, indent=2)

@@ -28,11 +28,10 @@ class Baseline:
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.tokenizer.pad_token = self.tokenizer.eos_token
         self.device = "cuda"
-
     
     def generate_pred(self, question: str, context: List[str], dataset_name: str):
         prompt = answer_prompt(question, context, "baseline")
-        print(f"Prompt:\n{prompt}")
+        #print(f"Prompt:\n{prompt}")
         return self._generate(prompt)
 
         
@@ -41,7 +40,8 @@ class Baseline:
         predictions = []
         for example in tqdm(dataset, desc=f"Predicting {dataset_name}"):
             prediction = self.generate_pred(example["question"], example["context"], dataset_name)
-            print(f"{prediction}\n")
+            print(f"\nQ: {example['question']}")
+            print(f"A: {prediction}")
             samples.append(
                 {
                     "id": example["id"],
@@ -107,16 +107,13 @@ def main():
         raise ValueError(f"Unknown dataset: {args.dataset}")
 
     predictions, samples = baseline.generate_all_preds(dataset, args.dataset)
-    path = Path(f"samples/{args.dataset}/baseline_{args.seed}_{args.n_samples}.json")
-    with open(path, "w") as f:
-        json.dump({"samples": samples}, f, indent=2)
-
     config = {
         "dataset": args.dataset,
         "method": "baseline",
         "seed": args.seed,
-        "n_samples": args.n_samples,
+        "n": args.n_samples,
     }
+    QAEvaluator.save_samples(samples, config)
     _, scores = QAEvaluator.evaluate(predictions, True, config)
     print(scores)
 

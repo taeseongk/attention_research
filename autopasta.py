@@ -218,17 +218,13 @@ def main():
         raise ValueError(f"Unknown dataset: {args.dataset}")
 
     predictions, samples = autopasta.generate_all_preds(dataset, args.dataset)
-    path = Path(f"samples/{args.dataset}/autopasta_{args.seed}_{args.n_samples}.json")
-    with open(path, "w") as f:
-        json.dump({"samples": samples}, f, indent=2)
-
     config = {
         "dataset": args.dataset,
         "method": "autopasta",
         "seed": args.seed,
         "n": args.n_samples,
     }
-
+    QAEvaluator.save_samples(samples, config)
     _, scores = QAEvaluator.evaluate(
         predictions, True, config    
     )

@@ -51,26 +51,36 @@ def get_differences():
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dataset", type=str, choices=["squad", "hotpotqa", "nq"], help="Dataset to use")
-    parser.add_argument("--method1", type=str, choices=["baseline", "iter_prompt", "autopasta"], help="First method")
-    parser.add_argument("--method2", type=str, choices=["baseline", "iter_prompt", "autopasta"], help="Second method")
+    parser.add_argument("--file1", type=str, required=True, help="Path to first file")
+    parser.add_argument("--file2", type=str, required=True, help="Path to second file")
     args = parser.parse_args()
 
-    if args.method1 == args.method2:
+    if args.file1== args.file2:
+        print(f"Error: Same files")
         return
 
-    path1 = Path(f"results/{args.dataset}/{args.method1}.json")
-    path2 = Path(f"results/{args.dataset}/{args.method2}.json")
+    path1 = Path(args.file1)
+    path2 = Path(args.file2)
+
+    if not path1.exists():
+        print(f"Error: File1 not found")
+        return
+    if not path2.exists():
+        print(f"Error: File2 not found")
+
     with open(path1, 'r') as f:
         data1 = json.load(f)
     with open(path2, 'r') as f:
         data2 = json.load(f)
 
-    for item1, item2 in zip(data1["results"], data2["results"]):
+    results1 = sorted(data1["results"], key=lambda x: x['id'])
+    results2 = sorted(data2["results"], key=lambda x: x['id'])
+
+    for item1, item2 in zip(results1, results2):
         if item1['exact_score'] != item2['exact_score'] or item1['f1_score'] != item2['f1_score']:
             print(item1["question"])
-            print(f"{args.method1}: {item1['prediction']}\nEM: {item1['exact_score']}\nF1: {item1['f1_score']}\n")
-            print(f"{args.method2}: {item2['prediction']}\nEM: {item2['exact_score']}\nF1: {item2['f1_score']}")
+            print(f"{item1['prediction']}\nEM: {item1['exact_score']}\nF1: {item1['f1_score']}\n")
+            print(f"{item2['prediction']}\nEM: {item2['exact_score']}\nF1: {item2['f1_score']}")
             input()
 
 if __name__ == "__main__":

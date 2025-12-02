@@ -81,7 +81,7 @@ class AutoPASTA(PASTA):
             key_sentence = self.generate_key_sentence(question, context[0])
             matched_sentence, _ = self.match_to_context(key_sentence, context[0])
             prompt = answer_prompt(question, context, "autopasta")
-            print(f"Prompt:\n{prompt}")
+            #print(f"Prompt:\n{prompt}")
             answer = self._generate(prompt, True, [matched_sentence])
             return answer, [key_sentence], [matched_sentence]
 
@@ -96,7 +96,7 @@ class AutoPASTA(PASTA):
                 )
                 matched_sentences.append(matched_sentence)
             prompt = answer_prompt(question, context, "autopasta")
-            print(f"Prompt:\n{prompt}")
+            #print(f"Prompt:\n{prompt}")
             answer = self._generate(prompt, True, matched_sentences)
             return answer, key_sentences, matched_sentences
 
@@ -109,7 +109,8 @@ class AutoPASTA(PASTA):
             prediction, key_sentences, matched_sentences = self.generate_pred(
                 example["question"], example["context"], dataset_name
             )
-            print(f"{prediction}\n")
+            print(f"\nQ: {example['question']}")
+            print(f"A: {prediction}")
             samples.append(
                 {
                     "id": example["id"],
@@ -194,16 +195,19 @@ def main():
 
     model_name = "meta-llama/Meta-Llama-3-8B-Instruct"
     head_config = {
-       30: [0, 8, 16, 24],
-       31: [4, 12, 20, 28],
+        26: [0, 8, 16, 24],
+        27: [4, 12, 20, 28],
+        28: [2, 10, 18, 26],
+        29: [6, 14, 22, 30],
+        30: [1, 9, 17, 25],
+        31: [3, 11, 19, 27],
     }
-    #head_config = {layer: list(range(32)) for layer in range(32)}
     autopasta = AutoPASTA(
         model_name=model_name,
         head_config=head_config,
         alpha=0.01,
     )
-
+    
     if args.dataset == "squad":
         dataset = QADatasetLoader.load_squad(n_samples=args.n_samples, seed=args.seed)
     elif args.dataset == "hotpotqa":

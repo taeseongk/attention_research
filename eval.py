@@ -100,15 +100,8 @@ class QAEvaluator:
         aggr_f1_score = sum(f1_scores) / len(f1_scores) * 100
         scores = {"aggr_exact_score": aggr_exact_score, "aggr_f1_score": aggr_f1_score}
 
-        output_path = f"results/{config['dataset']}/{config['method']}/"
-        for key, value in config.items():
-            if key == 'dataset' or key == 'method':
-                continue
-            output_path += f"{key}{value}_"
-        output_path += ".json"
-
         if save_file:
-            QAEvaluator.save_results(results, scores, output_path)
+            QAEvaluator.save_results(results, scores, config)
         return results, scores
 
     @staticmethod
@@ -117,11 +110,11 @@ class QAEvaluator:
         for key, value in config.items():
             if key == 'dataset' or key == 'method':
                 continue
-            output_path += f"{key}{value}_"
+            output_path += f"_{key}{value}"
         output_path += ".json"
         
         path = Path(output_path)
-        path.mkdir(parents=True, exist_ok=True)
+        path.parent.mkdir(parents=True, exist_ok=True)
         save_data = {"results": results, "scores": scores}
         with open(path, "w") as f:
             json.dump(save_data, f, indent=2)
@@ -132,11 +125,11 @@ class QAEvaluator:
         for key, value in config.items():
             if key == 'dataset' or key == 'method':
                 continue
-            output_path += f"{key}{value}_"
+            output_path += f"_{key}{value}"
         output_path += ".json"
 
         path = Path(output_path)
-        path.mkdir(parents=True, exist_ok=True)
+        path.parent.mkdir(parents=True, exist_ok=True)
         save_data = {"samples": samples}
         with open(path, "w") as f:
             json.dump(save_data, f, indent=2)

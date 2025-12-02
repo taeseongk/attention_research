@@ -64,7 +64,6 @@ class IterPrompt:
             key_sentence = self.generate_key_sentence(question, context[0])
             matched_sentence, _ = self.match_to_context(key_sentence, context[0])
             prompt = answer_prompt(question, context, "iter_prompt", [matched_sentence])
-            print(f"Prompt:\n{prompt}")
             answer = self._generate(prompt)
             return answer, [key_sentence], [matched_sentence]
 
@@ -77,7 +76,6 @@ class IterPrompt:
                 matched_sentence, _ = self.match_to_context(key_sentences[i], context[i])
                 matched_sentences.append(matched_sentence)
             prompt = answer_prompt(question, context, "iter_prompt", matched_sentences)
-            print(f"Prompt:\n{prompt}")
             answer = self._generate(prompt)
             return answer, key_sentences, matched_sentences
         return "", [], []
@@ -87,7 +85,8 @@ class IterPrompt:
         predictions = []
         for example in tqdm(dataset, desc=f"Predicting {dataset_name}"):
             prediction, key_sentences, matched_sentences = self.generate_pred(example["question"], example["context"], dataset_name)
-            print(f"{prediction}\n")
+            print(f"\nQ: {example['question']}")
+            print(f"A: {prediction}")
             samples.append(
                 {
                     "id": example["id"],

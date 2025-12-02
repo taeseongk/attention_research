@@ -46,6 +46,15 @@ Question: {question}
 Answer:"""
     return prompt
 
+def apply_template(prompt: str, tokenizer, add_gen_prompt: bool):
+    messages = [{"role": "user", "content": prompt}] 
+    text = tokenizer.apply_chat_template(
+        messages, tokenize=False, add_generation_prompt=add_gen_prompt
+    )
+    if not add_gen_prompt:
+        text = text[:-len("<|eot_id|>")]
+    return text
+
 def get_differences():
     pass
 

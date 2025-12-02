@@ -43,7 +43,7 @@ class LLMSteer:
             model_name,
             attn_implementation="eager",
             torch_dtype=torch.float16,
-            device_map="cuda:0",
+            device_map="auto",
             low_cpu_mem_usage=True,
         )
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -80,8 +80,8 @@ class LLMSteer:
             token_text = self.tokenizer.decode([token_id])
             stripped = token_text.strip()
 
-            if any(marker in token_text for marker in ['<|', '|>', 'user', 'assistant', 'system']):
-                return True
+            #if any(marker in token_text for marker in ['<|', '|>', 'user', 'assistant', 'system']):
+            #    return True
             
             if len(stripped) == 0 or stripped in ['.', ',', '!', '?', ';', ':',  '\n', '\t']:
                 return True
@@ -122,19 +122,35 @@ class LLMSteer:
         tokens = self.tokenizer(text, return_tensors="pt")
         input_ids = tokens.input_ids[0]
 
+        prefix_content = f"{self.config.prefix_prompt_1}\n\n"
+        prefix_messages = [{"role": "user", "content": prefix_content}]
+        prefix_text = self.tokenizer.apply_chat_template(
+            prefix_messages, tokenize=False, add_generation_prompt=True
+        )
+        prefix_tokens = self.tokenizer(prefix_text, return_tensors="pt")
+        prefix_len = prefix_tokens.input_ids.shape[1]
+
+
         for layer_idx in self.attn_scores_1.keys():
             sel = select_tokens(layer_idx, input_ids)
-            self.sel_tokens[layer_idx] = sel
+            #filtered_sel = {pos for pos in sel if pos >= prefix_len}
+            #self.sel_tokens[layer_idx] = filtered_sel
+            self.sel_tokens[layer_idx] = sel 
 
         # Debug: Print selected tokens
-        print(f"\n=== Selected Tokens Summary ===")
-        for layer_idx in sorted(self.sel_tokens.keys())[:3]:  # Show first 3 layers
-            tokens = self.sel_tokens[layer_idx]
-            print(f"Layer {layer_idx}: {len(tokens)} tokens selected")
-            if tokens:
-                sample_positions = sorted(list(tokens))[:5]
-                sample_tokens = [self.tokenizer.decode([input_ids[i]]) for i in sample_positions]
-                print(f"  Sample: {sample_tokens}")
+        #print(f"\n=== Selected Tokens Summary ===")
+        #print(f"Context: {context}...")
+        #print(f"Context length: {len(context)} chars")
+        #print(f"Total tokens in sequence: {self.ctxt_len}")
+        #print(f"\nSelected tokens per layer:")
+        ##for layer_idx in sorted(self.sel_tokens.keys())[:3]:  # Show first 3 layers
+        #for layer_idx in sorted(self.sel_tokens.keys())[:]:  # Show first 3 layers
+        #    tokens = self.sel_tokens[layer_idx]
+        #    print(f"Layer {layer_idx}: {len(tokens)} tokens selected")
+        #    if tokens:
+        #        sample_positions = sorted(list(tokens))[:]
+        #        sample_tokens = [self.tokenizer.decode([input_ids[i]]) for i in sample_positions]
+        #        print(f"  Sample: {sample_tokens}")
             
     def contextual_rereading(self, context: str):
         def hook(module: torch.nn.Module, input, output, layer_idx, is_first_pass, total_len):
@@ -207,7 +223,8 @@ class LLMSteer:
         self.cached_kv = outputs.past_key_values
         self.original_cached_kv = copy.deepcopy(self.cached_kv)
 
-        self._unpatch_attn_layers()
+        self._patch_attn_layers()
+        #self._unpatch_attn_layers()
 
     def generate_all_preds(self, dataset, dataset_name: str):
         samples = []
@@ -222,7 +239,14 @@ class LLMSteer:
 
         for context_text, examples in tqdm(context_groups.items(), desc=f"Contexts"):
             print(f"Preparing context ({len(examples)} questions on this context)")
+
+
+            if self.is_patched:
+                self._unpatch_attn_layers()
+
             self.contextual_rereading(context_text)
+            #print(self.sel_tokens.items())
+            #breakpoint()
             for example in examples:
                 answer = self._generate(example["question"], max_new_tokens=50, temperature=0.0)
                 print(f"\nQ: {example['question']}")
@@ -235,6 +259,10 @@ class LLMSteer:
                     "prediction": answer,
                     "gold": example["answers"],
                 })
+
+        if self.is_patched:
+            self._unpatch_attn_layers()
+
         return predictions, samples
 
 
@@ -387,13 +415,18 @@ class LLMSteer:
             
             return forward
         
+        steering_layers = range(16, 32)
+
         for layer_idx, layer in enumerate(self.model.model.layers):
+            if layer_idx not in steering_layers:
+                continue
             self.original_forwards[layer_idx] = layer.self_attn.forward
             steered_attention_fn = make_steered_attention_forward(layer_idx)
             layer.self_attn.forward = types.MethodType(
                 make_forward(steered_attention_fn),
                 layer.self_attn
             )
+        self.is_patched = True
 
     def _unpatch_attn_layers(self):
         for layer_idx, layer in enumerate(self.model.model.layers):
@@ -401,6 +434,7 @@ class LLMSteer:
                 layer.self_attn.forward = self.original_forwards[layer_idx]
         
         self.is_patched = False
+        self.original_forwards = {}
             
 def main():
     parser = argparse.ArgumentParser() 
